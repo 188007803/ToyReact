@@ -1,27 +1,22 @@
 "use strict"
 
-import ToyReact, { Component } from './ToyReact';
+import {ToyReact, Component} from './ToyReact'
 
-class MyComponent extends Component {
-    return () {
+class MyComponent extends Component{
+    render(){
         return (
             <div>
-                <span>Hello</span>
-                <span>World</span>
-                <span>!</span>
-                <div>
-                    {false}
-                    {this.children}
-                </div>
+                <span>hello</span>
+                <span>world</span>
+                123
+                {true}
+                {this.children}
             </div>
         )
     }
 }
 
-const a = (
-    <MyComponent name="a" id="ida">
-        <div>123</div>
-    </MyComponent>
-)
+let a = <MyComponent name="a" id="a"></MyComponent>
 
-ToyReact.render(a, document.body);
+
+ToyReact.render(a, document.body)
