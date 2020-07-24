@@ -33,6 +33,7 @@ class ElementWrapper {
         // vchild.mountTo(range)
     }
     mountTo(range) {
+        this.range = range;
         range.deleteContents()
         // range.insertNode(this.root)
         let element = document.createElement(this.type)
@@ -72,6 +73,7 @@ class TextWrapper {
         this.props = Object.create(null);
     }
     mountTo(range) {
+        this.range = range;
         range.deleteContents();
         range.insertNode(this.root)
     }
@@ -111,6 +113,8 @@ export class Component {
         // this.range.deleteContents()
         let vdom = this.render()
         if (this.vdom) {
+
+            // 判断节点本身相同
             let isSameNode = (node1, node2) => {
                 if (node1.type !== node2.type) {
                     return false;
@@ -125,6 +129,7 @@ export class Component {
                 }
             }
             
+            // 判断节点树（包括节点本身）是否相同
             let isSameTree = (node1, node2) => {
                 if (!isSameNode(node1, node2)) {
                     return false;
@@ -137,18 +142,23 @@ export class Component {
                         return false
                     }
                 }
+                return true;
             }
 
-            if (isSameTree(vdom, this.vdom)) {
-                return;
+            let replace = (newTree, oldTree) => {
+                if (isSameTree(newTree, this.oldTree)) {
+                    return;
+                }
+                if (!isSameNode(newTree, oldTree)) {
+                    vdom.mountTo(oldTree.range)
+                } else {
+                    for (let i = 0; i< newTree.children.length; i++) {
+                        replace(newTree.children[i], oldTree.children[i]);
+                    }
+                }
             }
-
-            if (!isSameNode(vdom, this.vdom)) {
-                vdom.mountTo(this.range)
-            } else {
-                
-            }
-
+            
+            replace(vdom, this.vdom)
 
         } else {
             vdom.mountTo(this.range)
