@@ -1,252 +1,241 @@
-"use strict";
 
-
+const childrenSymbol = Symbol('children');
 
 class ElementWrapper {
     constructor(type) {
-        // this.root = document.createElement(type);
         this.type = type;
         this.props = Object.create(null);
+        this[childrenSymbol] = [];
         this.children = [];
     }
     setAttribute(name, value) {
-        // if (name.match(/^on([\s\S]+)$/)){
-        //     let eventName = RegExp.$1.replace(/^[\s\S]/, s => s.toLowerCase());
-        //     this.root.addEventListener(eventName, value)
-        // }
-        // else if (name === 'className') {
-        //     name = 'class'
-        // }
-        // this.root.setAttribute(name, value)
-        this.props[name] = value
+        this.props[name] = value;
     }
     appendChild(vchild) {
-        this.children.push(vchild)
-        // let range = document.createRange()
-        // if (this.root.children.length) {
-        //     range.setStartAfter(this.root.lastChild)
-        //     range.setEndAfter(this.root.lastChild)
-        // } else {
-        //     range.setStart(this.root, 0,)
-        //     range.setEnd(this.root, 0,)
-        // }
-        // vchild.mountTo(range)
+        this[childrenSymbol].push(vchild);
+        this.children.push(vchild.vdom);
+    }
+    get vdom() {
+        return this;
     }
     mountTo(range) {
         this.range = range;
-        range.deleteContents()
-        // range.insertNode(this.root)
-        let element = document.createElement(this.type)
+
+        // 创建占位节点，守住位置
+        const placeholder = document.createElement('placeholder');
+        const endRange = document.createRange();
+        endRange.setStart(range.endContainer, range.endOffset)
+        endRange.setEnd(range.endContainer, range.endOffset)
+        endRange.insertNode(placeholder)
+
+        // 清空挂载范围
+        range.deleteContents();
+
+        // 创建实dom
+        const element = document.createElement(this.type)
+
+        // 完善实dom本身，包括属性，事件
         for (let name in this.props) {
             let value = this.props[name]
-            if (name.match(/^on([\s\S]+)$/)){
+            if (name.match(/^on([\s\S]+)$/)) {
                 let eventName = RegExp.$1.replace(/^[\s\S]/, s => s.toLowerCase());
                 element.addEventListener(eventName, value)
             }
             else if (name === 'className') {
-                name = 'class'
+                element.setAttribute('class', value)
             }
-            element.setAttribute(name, value)
+            else {
+                element.setAttribute(name, value)
+            }
         }
 
-        for (let child of this.children) {
-            let range = document.createRange()
+        // 完善实dom树
+        for (const child of this.children) {
+            let range = document.createRange();
             if (element.children.length) {
                 range.setStartAfter(element.lastChild)
-                range.setEndAfter(element.lastChild)
+                range.setEndAfter(element.lastChild);
             } else {
-                range.setStart(element, 0,)
-                range.setEnd(element, 0,)
+                range.setStart(element, 0)
+                range.setEnd(element, 0)
             }
             child.mountTo(range)
         }
 
-        range.insertNode(element)
+        // 挂载实dom
+        range.insertNode(element);
     }
 }
 
 class TextWrapper {
     constructor(content) {
-        this.root = document.createTextNode(content);
-        this.type = '#type';
+        this.root = document.createTextNode(content)
+        this.type = '#text';
         this.children = [];
         this.props = Object.create(null);
     }
     mountTo(range) {
         this.range = range;
         range.deleteContents();
-        range.insertNode(this.root)
+        range.insertNode(this.root);
+    }
+    get vdom(){
+        return this;
     }
 }
- 
+
 export class Component {
-
     constructor(){
-        this.children = []
-        this.props = Object.create(null)
+        this.children = [];
+        this.props = Object.create(null);
     }
-
-    get type(){
-        return this.constructor.name
-    }
-
-    setAttribute(name, value){
-        if (name.match(/^on([\s\S]+)$/)){
-            console.log(RegExp.$1)
-        }
-        this.props[name] = value;
-        this[name] = value;
-    }
-
-    mountTo(range){
-        this.range = range
+    mountTo(range) {
+        this.range = range;
         this.update();
     }
 
+    // 更新逻辑
     update(){
-        // const placeholder = document.createComment('placeholder')
-        // const range = document.createRange();
-        // range.setStart(this.range.endContainer, this.range.endOffset);
-        // range.setEnd(this.range.endContainer, this.range.endOffset);
-        // range.insertNode(placeholder)
+        const vdom = this.vdom;
+        if (this.oldVdom) {
 
-        // this.range.deleteContents()
-        let vdom = this.render()
-        if (this.vdom) {
+            // 比较节点
+            const isSameNode = (node1, node2) => {
+                if (node1.type !== node2.type) return false;
 
-            // 判断节点本身相同
-            let isSameNode = (node1, node2) => {
-                if (node1.type !== node2.type) {
-                    return false;
-                }
-                for (let name in node1.props) {
-                    if (node1.props[name] !== node2.props[name]) {
-                        return false;
-                    }
-                }
                 if (Object.keys(node1.props).length !== Object.keys(node2.props).length) {
                     return false;
                 }
-            }
-            
-            // 判断节点树（包括节点本身）是否相同
-            let isSameTree = (node1, node2) => {
-                if (!isSameNode(node1, node2)) {
-                    return false;
-                }
-                if (node1.children.length !== node2.children.length) {
-                    return false;
-                }
-                for (let i = 0; i < node1.children.length; i++) {
-                    if (!isSameTree(node1.children[i], node2.children[i])) {
-                        return false
+
+                for (const name in node1.props) {
+                    if (typeof node1.props[name] == 'object' && typeof node2.props[name] == 'object') {
+                        if (JSON.stringify(node1.props[name]) == JSON.stringify(node2.props[name])) {
+                            continue;
+                        }
                     }
+                    if (node1.props[name] !== node2.props[name]) return false;
+                }
+
+                return true;
+            }
+
+            // 比较树
+            const isSameTree = (node1, node2) => {
+                if (!isSameNode(node1, node2)) return false;
+                if (node1.children.length !== node2.children.length) return false;
+                for (let i = 0; i < node1.children.length; i++) {
+                    if (!isSameTree(node1.children[i], node2.children[i])) return false;
                 }
                 return true;
             }
 
-            let replace = (newTree, oldTree) => {
-                if (isSameTree(newTree, this.oldTree)) {
+            // 替换新旧节点
+            const replace = (newTree, oldTree) => {
+                if (isSameTree(node1, node2)) {
                     return;
                 }
                 if (!isSameNode(newTree, oldTree)) {
-                    vdom.mountTo(oldTree.range)
+                    newTree.mountTo(oldTree.range);
                 } else {
-                    for (let i = 0; i< newTree.children.length; i++) {
-                        replace(newTree.children[i], oldTree.children[i]);
+                    for (let i = 0; i < newTree.children.length; i++) {
+                        replace(newTree.children[i], oldTree.children[i])
                     }
                 }
             }
-            
-            replace(vdom, this.vdom)
+
+            replace(vdom, this.oldVdom, '')
 
         } else {
             vdom.mountTo(this.range)
         }
-        this.vdom = vdom;
-
-        // placeholder.parentNode.removeChild(placeholder)
+        this.oldVdom = vdom
     }
 
+
+    get vdom(){
+        return this.render().vdom;
+    }
     appendChild(vchild) {
-        this.children.push(vchild)
+        this.children.push(vchild);
     }
-
     setState(state) {
-        let merge = (oldState, newState) => {
-            for (let key in newState) {
-                if (typeof newState[key] === 'object' && newState[key !== null]) {
-                    if (typeof oldState[key] !== 'object') {
-                        if (Array.isArray(newState[key])) {
-                            oldState[key] = [];
+        const merge = (oldState, newState) => {
+            for (let p in newState) {
+                if (typeof newState[p] === 'object' && newState[p] !== null) {
+                    if (typeof oldState[p] !== 'object') {
+                        if (newState[p] instanceof Array) {
+                            oldState[p] = []
                         } else {
-                            oldState[key] = {}
+                            oldState[p] = {}
                         }
                     }
-                    merge(oldState[key], newState[key])
+                    merge(oldState[p], newState[p])
                 } else {
-                    oldState[key] = newState[key]
+                    oldState[p] = newState[p]
                 }
             }
         }
         if (!this.state && state) {
             this.state = {}
         }
-        merge(this.state, state)
-        this.update()
+        merge(this.state, state);
+        this.update();
     }
 }
 
 
-
-
 export const ToyReact = {
-    createElement(type, attributes, ...children) {
+    createElement (type, attributes, ...children) {
         let element;
+
+        // 创建vdom
         if (typeof type === 'string') {
             element = new ElementWrapper(type)
         } else {
-            element = new type
+            element = new type;
         }
 
+        // vdom 赋属性
         for (const name in attributes) {
             element.setAttribute(name, attributes[name])
         }
 
-        const insertChildren = (children) => {
-            for (const child of children) {
-
-                if (Array.isArray(child)) {
-                    insertChildren(child)
+        // vdom 载入子节点
+        const insertChild = (children) => {
+            for (let child of children) {
+                if (typeof child === 'object' && child instanceof Array) {
+                    insertChild(child)
                 } else {
-                    if (
-                        !(child instanceof Component) &&
-                        !(child instanceof ElementWrapper) &&
-                        !(child instanceof TextWrapper)
-                        ) {
-                        child = String(child)
+                    if (child === null || child === void 0) {
+                        child = '';
+                    }
+                    else if (
+                           !(child instanceof Component)
+                        && !(child instanceof ElementWrapper)
+                        && !(child instanceof TextWrapper)
+                    ){
+                        child = String(child);
                     }
                     if (typeof child === 'string') {
                         child = new TextWrapper(child)
                     }
-                    element.appendChild(child)
+                    element.appendChild(child);
                 }
             }
         }
 
-        insertChildren(children) 
-
-        return element
+        insertChild(children)
+        return element;
     },
 
-    render(vdom, element) {
-        let range = document.createRange()
+    render (vdom, element) {
+        const range = document.createRange();
         if (element.children.length) {
             range.setStartAfter(element.lastChild)
             range.setEndAfter(element.lastChild)
         } else {
-            range.setStart(element, 0,)
-            range.setEnd(element, 0,)
+            range.setStart(0)
+            range.setEnd(0)
         }
         vdom.mountTo(range)
     }
